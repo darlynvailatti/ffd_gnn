@@ -1,0 +1,24 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+flask = "*"
+pandas = "*"
+jupyter = "*"
+matplotlib = "*"
+seaborn = "*"
+scipy = "*"
+pymgclient = "*"
+networkx = "*"
+tensorflow = "*"
+tensorflow-gnn = "*"
+ipykernel = "*"
+tf-keras = "*"
+scikit-learn = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.10"
