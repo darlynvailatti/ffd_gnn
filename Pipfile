@@ -15,10 +15,9 @@ networkx = "*"
 tensorflow = "2.18.0"
 ipykernel = "*"
 tf-keras = "*"
-scikit-learn = "*"
 spektral = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "3.12.0"
+python_version = "3.10.0"

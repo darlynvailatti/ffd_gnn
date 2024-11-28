@@ -1,29 +1,27 @@
-version: '3.8'
-
 services:
   app:
     build: .
     ports:
-      - "5000:5000"
-    depends_on:
-      - memgraph
+      - "5001:5001"
+    # depends_on:
+    #   - memgraph
 
-  memgraph:
-    image: memgraph/memgraph-mage
-    ports:
-      - "7687:7687"
-      - "7444:7444"
-    volumes:
-      - memgraph_data:/var/lib/memgraph
+  # memgraph:
+  #   image: memgraph/memgraph-mage
+  #   ports:
+  #     - "7687:7687"
+  #     - "7444:7444"
+  #   volumes:
+  #     - memgraph_data:/var/lib/memgraph
 
-  memgraph_lab:
-    image: memgraph/lab
-    ports:
-      - "3000:3000"
-    depends_on:
-      - memgraph
-    environment:
-      QUICK_CONNECT_MG_HOST: host.docker.internal
+  # memgraph_lab:
+  #   image: memgraph/lab
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - memgraph
+  #   environment:
+  #     QUICK_CONNECT_MG_HOST: host.docker.internal
 
-volumes:
-  memgraph_data:
+# volumes:
+#   memgraph_data:
