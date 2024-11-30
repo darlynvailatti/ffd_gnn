@@ -9,6 +9,7 @@ class Account:
     fraudulent: bool
     fraud_probability: float
 
+
 @dataclasses.dataclass
 class AggregatedTransactionBetweenSenderReceiver:
     sender: Account
@@ -28,23 +29,31 @@ class GraphDatabase:
             print(f"Nodes: {self.graph.number_of_nodes()}")
             print(f"Edges: {self.graph.number_of_edges()}")
 
+    def get_graphml(self):
+        return nx.generate_graphml(self.graph)
+
     def get_accounts(self) -> list[Account]:
         accounts = []
         for node, attrs in self.graph.nodes(data=True):
             is_fraud = attrs["is_fraud"]
             customer_id = attrs["customer_id"]
-            account = Account(node, customer_id,  is_fraud, 0.0)
+            account = Account(node, customer_id, is_fraud, 0.0)
             accounts.append(account)
         return accounts
 
-    def get_transactions(self, filters: dict) -> list[AggregatedTransactionBetweenSenderReceiver]:
+    def get_transactions(
+        self, filters: dict
+    ) -> list[AggregatedTransactionBetweenSenderReceiver]:
         transactions = []
         for sender_id, receiver_id, attrs in self.graph.edges(data=True):
             is_filtered = False
             is_pair_filtered = filters.get("sender_id") and filters.get("receiver_id")
 
             if is_pair_filtered:
-                if filters["sender_id"] == sender_id and filters["receiver_id"] == receiver_id:
+                if (
+                    filters["sender_id"] == sender_id
+                    and filters["receiver_id"] == receiver_id
+                ):
                     is_filtered = True
             else:
                 if filters.get("sender_id") and filters["sender_id"] == sender_id:
@@ -81,16 +90,25 @@ class GraphDatabase:
             customer_id = node["customer_id"]
             return Account(node["id"], customer_id, is_fraud, 0.0)
 
-    def create_new_transaction(self, sender_id: int, receiver_id: int, total_amount: float):
+    def create_new_transaction(
+        self, sender_id: int, receiver_id: int, total_amount: float
+    ):
         sender = self.get_account(sender_id)
         receiver = self.get_account(receiver_id)
 
         if not sender:
             raise ValueError(f"Sender {sender_id} not found")
-        
+
         if not receiver:
             raise ValueError(f"Receiver {receiver_id} not found")
 
         pair = (str(sender.id), str(receiver.id))
-        self.graph.edges[pair]["total_amount"] += total_amount
-        self.graph.edges[pair]["total_transactions"] += 1
+
+        if self.graph.has_edge(*pair):
+            current_total_amount = self.graph.edges[pair]["total_amount"]
+            self.graph.edges[pair]["total_amount"] = current_total_amount + float(total_amount)
+            self.graph.edges[pair]["total_transactions"] += 1
+        else:
+            raise ValueError(
+                f"There is no existing learned transactions between accounts {sender_id} and {receiver_id}."
+            )

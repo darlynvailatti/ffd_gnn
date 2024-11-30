@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fraud Detection using GNNs</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <style>
+        #results {
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: #555;
+        }
+
+        #graph-container {
+            display: none;
+            text-align: center;
+        }
+
+        .floating-box {
+            position: absolute;
+            z-index: 1000;
+            background-color: white;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-fluid m-2">
+        <div class="row m-4">
+            <h1>Fraud Detection using GNNs</h1>
+        </div>
+        <div class="row m-2">
+            <div class="col-md-6" id="main-container">
+                <div class="alert alert-info" role="alert">
+                    This experimental application leverages Graph Neural Networks (GNNs) to predict fraud in financial
+                    transactions.
+                    It utilizes a pre-existing synthetic dataset to train a Graph Convolutional Network (GCN) model
+                    using TensorFlow and Spektral.
+                    The interactive graph on the right visualizes accounts and their aggregated transaction
+                    relationships.
+                    The model evaluates new transactions by analyzing the sender, receiver, and amount, predicting the
+                    likelihood of fraud.
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        Instructions
+                    </div>
+                    <div class="card-body">
+                        <ol>
+                            <li>At the FROM field, choose the account that is sending the money.</li>
+                            <li>At the TO field, choose the account that will receive the money.</li>
+                            <li>At the AMOUNT field, enter the amount of money being sent.</li>
+                            <li>Click the PREDICT button.</li>
+                        </ol>
+                    </div>
+                </div>
+                <form class="mt-4 row g-3">
+                    <div class="col-md-4">
+                        <label for="from" class="form-label">From</label>
+                        <select id="from" class="form-control">
+                            <option value="" disabled selected>Please choose account ID</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="to" class="form-label">To</label>
+                        <select id="to" class="form-control">
+                            <option value="" disabled selected>Please choose account ID</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="amount" class="form-label">Amount</label>
+                        <input type="number" id="amount" class="form-control" placeholder="Enter transaction amount">
+                    </div>
+                </form>
+                <div class="mt-4">
+                    <button type="button" class="btn btn-danger disabled" id="predict-btn"
+                        onclick="predictFraud()">Predict</button>
+                    <button type="button" class="btn btn-secondary" onclick="clearFields()">Clear</button>
+                </div>
+                <div id="results" class="mt-3 text-muted" style="display: none;">Results: n% fraudulent</div>
+                <div id="failure-panel" class="alert alert-danger mt-3" role="alert" style="display: none;">
+                    Failed to predict fraud. Please try again.
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        Graph Information
+                    </div>
+                    <div class="card-body">
+                        <p id="graph-info">Accounts (nodes): 0, Transactions (edges): 0</p>
+                        <div id="graph" style="width: 100%; height: 600px; position: relative;"></div>
+                        <div class="container row">
+                            <p class="text-danger m-1">Fraud</p>
+                            <p class="text-secondary m-1">Non-Fraud</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import Graph from 'https://cdn.skypack.dev/graphology';
+        import Sigma from 'https://cdn.skypack.dev/sigma';
+        import { parse } from 'https://cdn.skypack.dev/graphology-graphml';
+        import circlepack from 'https://cdn.skypack.dev/graphology-layout';
+
+        const container = document.getElementById('graph');
+        const graphInfo = document.getElementById('graph-info');
+        const edgeDetails = document.getElementById('edge-details');
+
+        graphInfo.textContent = 'Loading graph...';
+
+        fetch('/graphml')
+            .then(response => response.text())
+            .then(graphml => {
+                const parser = new DOMParser();
+                const graph = parse(Graph, graphml);
+
+                graph.forEachNode((node, attributes) => {
+                    graph.setNodeAttribute(node, 'x', Math.random());
+                    graph.setNodeAttribute(node, 'y', Math.random());
+                    graph.setNodeAttribute(node, 'type', 'circle'); // Ensure node type is set to a recognized type
+                    graph.setNodeAttribute(node, 'label', attributes.label || node); // Set node label
+                });
+
+                graphInfo.textContent = `Accounts (nodes): ${graph.order}, Transactions (edges): ${graph.size}`;
+
+                console.log(graph.nodes().length, graph.edges().length);
+
+                // With options
+                console.log(circlepack);
+                const positions = circlepack.circlepack(graph, {
+                    hierarchyAttributes: ['degree', 'community'],
+                    // rng: customRngFunction
+                });
+
+                // To directly assign the positions to the nodes:
+                circlepack.circlepack.assign(graph);
+                let state = { type: "idle" }
+                const renderer = new Sigma(graph, container, {
+                    enableEdgeEvents: true,
+                    zIndex: true,
+                    renderEdgeLabels: true,
+                    renderLabels: true, // Enable label rendering
+                    defaultEdgeType: 'arrow', // Set default edge type to arrow
+                    edgeReducer: (edge, attributes) => {
+                        const res = { ...attributes };
+                        let edgeColor = '#cccccc';
+
+                        const fraudProportion = attributes.fraud_proportion;
+                        if (fraudProportion > 0.5) {
+                            edgeColor = '#FF0000'
+                        } else {
+                            edgeColor = '#cccccc';
+                        }
+
+                        const fadedEdgeColor = '#f0f0f0';
+                        // Hover
+                        if (state.type === "hovered") {
+                            if (edge === state.edge) {
+                                res.size = (res.size || 1) * 1.5;
+                                res.zIndex = 1;
+                                res.color = edgeColor;
+                                res.label = `Fraud: ${(fraudProportion * 100).toFixed(2)}% \nAmount: ${attributes.total_amount}\nTransactions: ${attributes.total_transactions}`;
+                            } else {
+                                res.color = fadedEdgeColor;
+                                res.zIndex = 0;
+                            }
+                        } else {
+                            res.color = edgeColor;
+                            res.label = null
+                        }
+
+
+                        return res;
+                    },
+                    nodeReducer: (node, attributes) => {
+                        const res = { ...attributes };
+
+                        const isFraud = attributes.is_fraud;
+                        let nodeColor = '#282928';
+                        if (isFraud) {
+                            nodeColor = '#FF0000'
+                        }
+
+                        // Hover
+                        if (state.type === "hovered") {
+                            if (node === state.source || node === state.target) {
+                                res.highlighted = true;
+                                res.zIndex = 1;
+                                res.color = nodeColor;
+                            } else {
+                                res.label = undefined;
+                                res.zIndex = 0;
+                                res.color = '#cccccc';
+                            }
+                        }else{
+                            res.color = nodeColor;
+                        }
+
+                        return res;
+                    },
+                });
+
+                // Add event listener for edge selection
+                renderer.on("clickEdge", ({ edge }) => {
+                    state = { type: "hovered", edge, source: graph.source(edge), target: graph.target(edge) };
+                    renderer.refresh();
+                });
+
+                renderer.on("clickStage", () => {
+                    state = { type: "idle" };
+                    renderer.refresh();
+                });
+
+            });
+    </script>
+
+    <script>
+
+        function fetchAccounts() {
+            fetch('/accounts')
+                .then(response => response.json())
+                .then(data => {
+                    const fromSelect = document.getElementById('from');
+                    const toSelect = document.getElementById('to');
+
+                    data.sort((a, b) => a.id - b.id);
+                    data.forEach(account => {
+                        const option = document.createElement('option');
+                        option.value = account.id;
+                        option.textContent = account.id;
+
+                        fromSelect.appendChild(option.cloneNode(true));
+                        toSelect.appendChild(option);
+                    });
+                });
+        }
+
+        function checkFields() {
+            const from = document.getElementById('from').value;
+            const to = document.getElementById('to').value;
+            const amount = document.getElementById('amount').value;
+            const predictBtn = document.getElementById('predict-btn');
+
+            if (from && to && amount) {
+                predictBtn.classList.remove('disabled');
+            } else {
+                predictBtn.classList.add('disabled');
+            }
+        }
+
+        document.getElementById('from').addEventListener('change', checkFields);
+        document.getElementById('to').addEventListener('change', checkFields);
+        document.getElementById('amount').addEventListener('input', checkFields);
+
+        function predictFraud() {
+            const from = document.getElementById('from').value;
+            const to = document.getElementById('to').value;
+            const amount = document.getElementById('amount').value;
+
+            if (!amount || !from || !to) {
+                return;
+            }
+
+            fetch('/transactions/new', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ "sender_id": from, "receiver_id": to, "total_amount": amount })
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(errorData => {
+                            throw new Error(errorData.error);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    let fraudProbability = data.fraud_probability;
+                    const resultsElement = document.getElementById('results');
+                    resultsElement.textContent = "Results: " + fraudProbability.toFixed(2) + "% fraudulent";
+                    resultsElement.style.display = 'block';
+                    document.getElementById('failure-panel').style.display = 'none';
+                })
+                .catch(error => {
+                    const resultsElement = document.getElementById('results');
+                    resultsElement.textContent = '';
+                    resultsElement.style.display = 'none';
+                    const failureElement = document.getElementById('failure-panel');
+                    failureElement.style.display = 'block';
+                    failureElement.textContent = "Failed to predict fraud: " + error.message;
+                });
+        }
+
+        function clearFields() {
+            document.getElementById('from').selectedIndex = 0;
+            document.getElementById('to').selectedIndex = 0;
+            document.getElementById('amount').value = '';
+            const resultsElement = document.getElementById('results');
+            resultsElement.textContent = 'Results: n% fraudulent';
+            resultsElement.style.display = 'none';
+        }
+
+        // Fetch accounts when the page loads
+        document.addEventListener('DOMContentLoaded', fetchAccounts);
+
+    </script>
+</body>
+
+</html>

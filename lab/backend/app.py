@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Hello, Flask!"
+    return open("lab/frontend/index.html").read()
 
 if __name__ == '__main__':
 	app.run(host='0.0.0.0', port=5001)
@@ -41,8 +41,15 @@ def get_transactions_by_sender_receiver():
     total_amount = payload["total_amount"]
 
     # Update graph with new transaction
-    graph_database.create_new_transaction(sender_id, receiver_id, total_amount)
+    try:
+        graph_database.create_new_transaction(sender_id, receiver_id, total_amount)
+        return jsonify({"fraud": True, "fraud_probability": 0.0})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    
+@app.route("/graphml")
+def get_graphml():
+    # Return the graph in GraphML format
+    return graph_database.get_graphml()
 
-    # Call predictions service
-    # Get new predictions for both sender and receiver
-    return jsonify({"fraud": True, "fraud_probability": 0.0})
+    
