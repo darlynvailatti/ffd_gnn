@@ -57,9 +57,8 @@
                     </div>
                     <div class="card-body">
                         <ol>
-                            <li>At the FROM field, choose the account that is sending the money.</li>
-                            <li>At the TO field, choose the account that will receive the money.</li>
-                            <li>At the AMOUNT field, enter the amount of money being sent.</li>
+                            <li>At the right in the graph, select one edge</li>
+                            <li>Fill the amount of money</li>
                             <li>Click the PREDICT button.</li>
                         </ol>
                     </div>
@@ -87,7 +86,26 @@
                         onclick="predictFraud()">Predict</button>
                     <button type="button" class="btn btn-secondary" onclick="clearFields()">Clear</button>
                 </div>
-                <div id="results" class="mt-3 text-muted" style="display: none;">Results: n% fraudulent</div>
+                <div id="results-loading" style="display: none;" class="mt-4">Predicting...</div>
+                <div id="results" class="mt-3 text-muted" style="display: none;">
+                    
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Sender</th>
+                                <th>Receiver</th>
+                                <th>Is Fraud?</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td id="sender-prob"></td>
+                                <td id="receiver-prob"></td>
+                                <td id="is-fraud"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <div id="failure-panel" class="alert alert-danger mt-3" role="alert" style="display: none;">
                     Failed to predict fraud. Please try again.
                 </div>
@@ -175,6 +193,10 @@
                                 res.zIndex = 1;
                                 res.color = edgeColor;
                                 res.label = `Fraud: ${(fraudProportion * 100).toFixed(2)}% \nAmount: ${attributes.total_amount}\nTransactions: ${attributes.total_transactions}`;
+
+                                // Set form fields
+                                document.getElementById('from').value = graph.source(edge);
+                                document.getElementById('to').value = graph.target(edge);
                             } else {
                                 res.color = fadedEdgeColor;
                                 res.zIndex = 0;
@@ -207,7 +229,7 @@
                                 res.zIndex = 0;
                                 res.color = '#cccccc';
                             }
-                        }else{
+                        } else {
                             res.color = nodeColor;
                         }
 
@@ -222,6 +244,8 @@
                 });
 
                 renderer.on("clickStage", () => {
+                    document.getElementById('from').value = null
+                    document.getElementById('to').value = null
                     state = { type: "idle" };
                     renderer.refresh();
                 });
@@ -276,6 +300,10 @@
                 return;
             }
 
+            // Show the loading indicator
+            document.getElementById('results-loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+
             fetch('/transactions/new', {
                 method: 'POST',
                 headers: {
@@ -292,13 +320,22 @@
                     return response.json();
                 })
                 .then(data => {
-                    let fraudProbability = data.fraud_probability;
-                    const resultsElement = document.getElementById('results');
-                    resultsElement.textContent = "Results: " + fraudProbability.toFixed(2) + "% fraudulent";
-                    resultsElement.style.display = 'block';
+                    const senderProb = (data.nodes.sender * 100).toFixed(2) + '%';
+                    const receiverProb = (data.nodes.receiver * 100).toFixed(2) + '%';
+                    const isFraud = data.is_fraud ? 'Yes' : 'No';
+
+                    document.getElementById('sender-prob').textContent = senderProb;
+                    document.getElementById('receiver-prob').textContent = receiverProb;
+                    document.getElementById('is-fraud').textContent = isFraud;
+
+                    // Hide the loading indicator
+                    document.getElementById('results-loading').style.display = 'none';
+                    document.getElementById('results').style.display = 'block';
                     document.getElementById('failure-panel').style.display = 'none';
                 })
                 .catch(error => {
+                    // Hide the loading indicator
+                    document.getElementById('results-loading').style.display = 'none';
                     const resultsElement = document.getElementById('results');
                     resultsElement.textContent = '';
                     resultsElement.style.display = 'none';

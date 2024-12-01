@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request
-from models import GraphDatabase
+from models import GraphDatabase, GNN
 
 app = Flask(__name__)
 
@@ -8,10 +8,13 @@ app = Flask(__name__)
 def home():
     return open("lab/frontend/index.html").read()
 
-if __name__ == '__main__':
-	app.run(host='0.0.0.0', port=5001)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5001)
 
 graph_database = GraphDatabase()
+gnn_model = GNN(graph_database.graph)
+
 
 @app.route("/accounts")
 def get_accounts():
@@ -42,14 +45,32 @@ def get_transactions_by_sender_receiver():
 
     # Update graph with new transaction
     try:
+        graph = graph_database.graph
         graph_database.create_new_transaction(sender_id, receiver_id, total_amount)
-        return jsonify({"fraud": True, "fraud_probability": 0.0})
+
+        predicitons = gnn_model.predict(graph)
+
+        # Find Pair prediction
+        node_list = list(graph.nodes)
+        node_indices = {node: idx for idx, node in enumerate(node_list)}
+
+        node_a_ix = node_indices[str(sender_id)]
+        node_b_ix = node_indices[str(receiver_id)]
+
+        a_fraud = float(predicitons.flatten()[node_a_ix])
+        b_fraud = float(predicitons.flatten()[node_b_ix])
+
+        return jsonify(
+            {
+                "nodes": {"sender": a_fraud, "receiver": b_fraud},
+                "is_fraud": bool(a_fraud > 0.5 or b_fraud > 0.5),
+            }
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-    
+
+
 @app.route("/graphml")
 def get_graphml():
     # Return the graph in GraphML format
     return graph_database.get_graphml()
-
-    
